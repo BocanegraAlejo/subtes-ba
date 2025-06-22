@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
+import { Badge } from "./ui/badge"
+import { Input } from "./ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Search } from "lucide-react"
-import { subteData, type Station } from "@/lib/subte-data"
+import { subteData, type Station } from "../lib/subte-data"
 import { StationInfo } from "./station-info"
 
 export function ExploreStations() {

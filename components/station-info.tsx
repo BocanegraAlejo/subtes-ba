@@ -1,7 +1,7 @@
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "./ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { MapPin, ShoppingBag, Palette, Utensils, TrainIcon, Landmark, Briefcase } from "lucide-react"
-import type { Station, PointOfInterest } from "@/lib/subte-data"
+import type { Station, PointOfInterest } from "../lib/subte-data"
 
 interface StationInfoProps {
   station: Station

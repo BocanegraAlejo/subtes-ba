@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "./ui/button"
+import { Input } from "./ui/input"
+import { Badge } from "./ui/badge"
+import { Card, CardContent } from "./ui/card"
 import { MapPin, Clock, Search } from "lucide-react"
-import { importantPlaces, type ImportantPlace } from "@/lib/subte-data"
+import { importantPlaces, type ImportantPlace } from "../lib/subte-data"
 
 interface PlaceSelectorProps {
   onPlaceSelect: (stationName: string, placeName: string) => void
