@@ -6,7 +6,7 @@ import { Button } from "../components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
 import { Badge } from "../components/ui/badge"
 import { MapPin, Navigation, ArrowRight, Train } from "lucide-react"
-import { subteData, findRoute, getLineDirection, type Route } from "@/lib/subte-data"
+import { subteData, findRoute, getLineDirection, type Route } from "../lib/subte-data"
 // Agregar import para el nuevo componente
 import { StationInfo } from "../components/station-info"
 // Agregar import para el componente de exploración
