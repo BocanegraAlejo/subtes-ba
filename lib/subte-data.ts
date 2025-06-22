@@ -621,8 +621,8 @@ export function findRoute(origin: string, destination: string): Route | null {
 
   // Conexiones especiales entre estaciones cercanas
   const specialConnections: { [key: string]: Array<{ station: string; line: string; cost: number }> } = {
-    "Jujuy-E": [{ station: "Humberto 1°", line: "H", cost: 1 }],
-    "Humberto 1°-H": [{ station: "Jujuy", line: "E", cost: 1 }],
+    "Jujuy-E": [{ station: "Humberto 1°", line: "H", cost: 0 }], // Sin costo adicional para conexión peatonal
+    "Humberto 1°-H": [{ station: "Jujuy", line: "E", cost: 0 }],
   }
 
   // BFS con manejo de conexiones especiales
@@ -663,10 +663,12 @@ export function findRoute(origin: string, destination: string): Route | null {
   while (queue.length > 0 && iterations < maxIterations) {
     iterations++
 
-    // Ordenar por calidad: menos transbordos, luego menos distancia
+    // Ordenar por calidad: menos distancia total, luego menos transbordos
     queue.sort((a, b) => {
-      if (a.transfers !== b.transfers) return a.transfers - b.transfers
-      return a.distance - b.distance
+      const totalA = a.distance + (a.transfers * 2) // Penalizar transbordos
+      const totalB = b.distance + (b.transfers * 2)
+      if (totalA !== totalB) return totalA - totalB
+      return a.transfers - b.transfers
     })
 
     const current = queue.shift()!
@@ -684,23 +686,24 @@ export function findRoute(origin: string, destination: string): Route | null {
       if (route) {
         if (
           !bestRoute ||
-          route.transfers < bestRoute.transfers ||
-          (route.transfers === bestRoute.transfers && route.totalStations < bestRoute.totalStations)
+          route.totalStations < bestRoute.totalStations ||
+          (route.totalStations === bestRoute.totalStations && route.transfers < bestRoute.transfers)
         ) {
           bestRoute = route
           console.log("🏆 Nueva mejor ruta:", route)
 
-          // Si encontramos una ruta excelente, la devolvemos
-          if (route.transfers <= 2) {
-            return route
+          // Si encontramos una ruta muy buena, continuamos buscando un poco más
+          if (route.totalStations <= 12 && route.transfers <= 2) {
+            // Continuar buscando por un poco más para encontrar rutas aún mejores
+            if (iterations > 200) return route
           }
         }
       }
       continue
     }
 
-    // Limitar búsqueda
-    if (current.transfers > 3 || current.distance > 20) continue
+    // Limitar búsqueda - más estricto para forzar rutas cortas
+    if (current.transfers > 2 || current.distance > 15) continue
 
     // 1. Explorar estaciones en la misma línea
     const lineStations = subteData.lines[current.line as keyof typeof subteData.lines]
@@ -738,7 +741,6 @@ export function findRoute(origin: string, destination: string): Route | null {
       }
     }
 
-    // 2. Explorar transbordos normales
     const connections = stationConnections[current.station]
     if (connections && connections[current.line]) {
       console.log(`🔄 Transbordos en ${current.station}:`, connections[current.line])
@@ -757,7 +759,7 @@ export function findRoute(origin: string, destination: string): Route | null {
       }
     }
 
-    // 3. Explorar conexiones especiales
+    // 2. Explorar conexiones especiales (antes que transbordos normales para priorizarlas)
     const specialKey = `${current.station}-${current.line}`
     const specialConns = specialConnections[specialKey]
     if (specialConns) {
@@ -777,6 +779,8 @@ export function findRoute(origin: string, destination: string): Route | null {
         }
       }
     }
+
+    // 3. Explorar transbordos normales
   }
 
   console.log(`🔍 Iteraciones: ${iterations}`)
@@ -943,32 +947,51 @@ function buildRouteFromPath(path: Array<{ station: string; line: string }>): Rou
     return null
   }
 
+  console.log("🛤️ Construyendo ruta desde path:", path)
+
   const segments: RouteSegment[] = []
   let currentSegment: RouteSegment | null = null
   let totalStations = 0
   let transfers = 0
 
-  for (let i = 0; i < path.length - 1; i++) {
+  for (let i = 0; i < path.length; i++) {
     const current = path[i]
-    const next = path[i + 1]
+    const previous = i > 0 ? path[i - 1] : null
 
-    if (!currentSegment || current.line !== next.line) {
+    // Si es el primer elemento o cambió de línea
+    if (!currentSegment || (previous && current.line !== previous.line)) {
+      // Guardar el segmento anterior si existe
       if (currentSegment) {
+        console.log("📍 Segmento completado:", currentSegment)
         segments.push(currentSegment)
       }
-      currentSegment = { line: next.line, stations: [current.station] }
-      transfers++
+      
+      // Crear nuevo segmento
+      currentSegment = { line: current.line, stations: [current.station] }
+      console.log("🆕 Nuevo segmento iniciado:", currentSegment)
+      
+      if (segments.length > 0) {
+        transfers++
+      }
+    } else {
+      // Agregar estación al segmento actual solo si no es la misma estación
+      if (currentSegment.stations[currentSegment.stations.length - 1] !== current.station) {
+        currentSegment.stations.push(current.station)
+        console.log("➕ Estación agregada:", current.station, "al segmento línea", current.line)
+      }
     }
-
-    currentSegment.stations.push(next.station)
   }
 
+  // Agregar el último segmento
   if (currentSegment) {
+    console.log("📍 Último segmento:", currentSegment)
     segments.push(currentSegment)
   }
 
   totalStations = path.length
   transfers = segments.length - 1
+
+  console.log("🏁 Ruta final construida:", { segments, totalStations, transfers })
 
   return {
     segments,
@@ -979,35 +1002,86 @@ function buildRouteFromPath(path: Array<{ station: string; line: string }>): Rou
 
 // Función para obtener la dirección de una línea
 export function getLineDirection(line: string, stations: string[]): string {
+  console.log(`🧭 Calculando dirección para línea ${line}, estaciones:`, stations)
+  
+  // Terminales en orden: [primera_estación_del_array, última_estación_del_array]
   const terminals: { [key: string]: [string, string] } = {
-    A: ["Plaza de Mayo", "San Pedrito"],
-    B: ["L.N. Alem", "J.M. de Rosas"], 
-    C: ["Retiro", "Constitución"],
-    D: ["Catedral", "Congreso de Tucumán"],
-    E: ["Plaza de los Virreyes", "Retiro"],
-    H: ["Facultad de Derecho", "Hospitales"],
+    A: ["Plaza de Mayo", "San Pedrito"],                    // 0 → último
+    B: ["L.N. Alem", "J.M. de Rosas"],                     // 0 → último  
+    C: ["Retiro", "Constitución"],                         // 0 → último
+    D: ["Catedral", "Congreso de Tucumán"],                // 0 → último
+    E: ["Plaza de los Virreyes", "Retiro"],                // 0 → último
+    H: ["Facultad de Derecho", "Hospitales"],              // 0 → último (Facultad=norte, Hospitales=sur)
   }
 
-  if (!terminals[line] || stations.length < 2) {
+  // Verificar que la línea exista
+  if (!terminals[line]) {
+    console.warn(`⚠️ Línea ${line} no encontrada en terminales`)
+    return ""
+  }
+
+  // Si solo hay una estación, intentar determinar dirección por contexto
+  if (stations.length < 2) {
+    console.warn(`⚠️ Menos de 2 estaciones para línea ${line}:`, stations)
     return ""
   }
 
   const [terminal1, terminal2] = terminals[line]
-  const startStation = stations[0]
-  const endStation = stations[stations.length - 1]
-
+  
   // Obtener todas las estaciones de la línea para determinar la dirección
   const lineStations = subteData.lines[line as keyof typeof subteData.lines]
-  if (!lineStations) return ""
+  if (!lineStations) {
+    console.warn(`⚠️ No se encontraron estaciones para línea ${line}`)
+    return ""
+  }
+
+  // Filtrar solo las estaciones que realmente pertenecen a esta línea
+  const validStations = stations.filter(station => 
+    lineStations.some(s => s.name === station)
+  )
+  
+  console.log(`🔍 Estaciones válidas para línea ${line}:`, validStations)
+  
+  if (validStations.length < 2) {
+    console.warn(`⚠️ No hay suficientes estaciones válidas para línea ${line}`)
+    return ""
+  }
+
+  const startStation = validStations[0]
+  const endStation = validStations[validStations.length - 1]
+
+  console.log(`📍 Estación inicial: ${startStation}, final: ${endStation}`)
 
   const startIndex = lineStations.findIndex(s => s.name === startStation)
   const endIndex = lineStations.findIndex(s => s.name === endStation)
 
-  if (startIndex === -1 || endIndex === -1) return ""
+  console.log(`📊 Índice inicial: ${startIndex}, índice final: ${endIndex}`)
 
-  // Si el índice final es mayor que el inicial, vamos hacia la terminal 2
-  // Si el índice final es menor que el inicial, vamos hacia la terminal 1
-  const direction = endIndex > startIndex ? terminal2 : terminal1
+  // Si no encontramos las estaciones, intentar con lógica alternativa
+  if (startIndex === -1 || endIndex === -1) {
+    console.warn(`⚠️ No se encontraron índices para ${startStation} (${startIndex}) o ${endStation} (${endIndex})`)
+    return ""
+  }
+
+  // Lógica principal: si el índice final es mayor que el inicial, vamos hacia la terminal 2
+  let direction: string
   
+  if (endIndex > startIndex) {
+    // Va hacia adelante en el array = hacia terminal2
+    direction = terminal2
+    console.log(`➡️ Va hacia adelante (${startIndex} → ${endIndex}): ${direction}`)
+  } else if (endIndex < startIndex) {
+    // Va hacia atrás en el array = hacia terminal1  
+    direction = terminal1
+    console.log(`⬅️ Va hacia atrás (${startIndex} → ${endIndex}): ${direction}`)
+  } else {
+    // Si son iguales (misma estación), usar la estación más cercana al final de la línea
+    const totalStations = lineStations.length
+    const midPoint = totalStations / 2
+    direction = startIndex < midPoint ? terminal2 : terminal1
+    console.log(`🔄 Misma estación, usando punto medio: ${direction}`)
+  }
+  
+  console.log(`✅ Dirección calculada: ${direction}`)
   return `dirección ${direction}`
 }
